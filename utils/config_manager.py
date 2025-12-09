@@ -112,4 +112,25 @@ def guardar_correos_config(usuario, email):
         cfg["correos_destino"] = lista
         guardar_config(cfg)
         return True
+def guardar_cuerpo_config(nombre, cuerpo):
+    cfg = cargar_config()
+    
+    lista = cfg.get("body_correos", [])
+    
+    item = {
+        "nombre": nombre,
+        "cuerpo": cuerpo
+    }
+    
+    if item in lista:
+        lista.remove(item)
+        cfg["body_correos"] = lista
+        guardar_config(cfg)
+        return False
+    else:
+        lista.append(item)
+        cfg["body_correos"] = lista
+        guardar_config(cfg)
+        return True
+    
     

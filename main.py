@@ -89,50 +89,49 @@ class App(tk.Tk):
         )
         
         menuBar = tk.Menu(self)
-        
+
+        # ================== Archivo ==================
         archivo_menu = tk.Menu(menuBar, tearoff=0)
-        archivo_menu.add_command(
-            label="Volver al menú",
-            command=self.mostrar_menu
-        )
+        archivo_menu.add_command(label="Volver al menú", command=self.mostrar_menu)
         archivo_menu.add_separator()
-        archivo_menu.add_command(
-            label="Salir",
-            command=self.destroy
-        )
+        archivo_menu.add_command(label="Salir", command=self.destroy)
         menuBar.add_cascade(label="Archivo", menu=archivo_menu)
 
-        # Menú "Herramientas"
+
+        # ================== Herramientas ==================
         herramientas_menu = tk.Menu(menuBar, tearoff=0)
-        herramientas_menu.add_command(
-            label="Procesador de Carpetas",
-            command=self.mostrar_procesador_carpetas
-        )
-        herramientas_menu.add_command(
-            label="Procesador de Excel",
-            command=self.mostrar_limpiar_excel
-        )
-        herramientas_menu.add_command(
-            label="PDA",
-            command=self.mostrar_PDA
-        )
+        herramientas_menu.add_command(label="Procesador de Carpetas", command=self.mostrar_procesador_carpetas)
+        herramientas_menu.add_command(label="Procesador de Excel", command=self.mostrar_limpiar_excel)
+        herramientas_menu.add_command(label="PDA", command=self.mostrar_PDA)
         menuBar.add_cascade(label="Herramientas", menu=herramientas_menu)
-        
-        # Menú "Configuraciones"        
+
+
+        # ================== Configuración ==================
         config_menu = tk.Menu(menuBar, tearoff=0)
-        config_menu.add_command(
-            label="Correo",
-            command=self.mostrar_config_correo
-        )
         menuBar.add_cascade(label="Configuración", menu=config_menu)
-        
+
+        # --- Submenú Correo ---
+        correo_menu = tk.Menu(config_menu, tearoff=0)
+        config_menu.add_cascade(label="Correo", menu=correo_menu)
+
+        # Opciones dentro de Correo
+        correo_menu.add_command(label="Nuevo correo", command=self.mostrar_config_correo)
+        correo_menu.add_command(label="Cuerpo de correo", command=self.mostrar_config_cuerpo)
+        correo_menu.add_separator()
+        correo_menu.add_command(label="Configuración avanzada", command=self.config_avanzada)
+
+        # ================== Ayuda ==================
         ayuda_menu = tk.Menu(menuBar, tearoff=0)
         ayuda_menu.add_command(
             label="Acerca de",
-            command=lambda: tk.messagebox.showinfo("Acerca de", "AutomatiSCD - by Mauro 😎 \n Función 'Procesador Excel' creada por Enrique Ahumada")
+            command=lambda: tk.messagebox.showinfo(
+                "Acerca de",
+                "AutomatiSCD - by Mauro 😎\nFunción 'Procesador Excel' creada por Enrique Ahumada"
+            )
         )
         menuBar.add_cascade(label="Ayuda", menu=ayuda_menu)
-        
+
+        # Aplicar menú
         self.config(menu=menuBar)
 
         base_path = getattr(sys, "_MEIPASS", os.path.abspath("."))
@@ -209,6 +208,12 @@ class App(tk.Tk):
     
     def mostrar_config_correo(self):
         self.correo.mostrar_config_correo()
+        
+    def mostrar_config_cuerpo(self):
+        self.correo.mostrar_config_cuerpo()
+        
+    def config_avanzada(self):
+        self.correo.config_avanzada()
     
     def _ocultar_todos(self):
         for widget in self.winfo_children():
