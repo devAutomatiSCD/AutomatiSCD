@@ -1,43 +1,99 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
-import os, sys
+from tkinter import ttk, messagebox, PhotoImage
+import os, sys, threading, socket
 
-from ui.procesador_carpetas import ProcesadorCarpetas
-from ui.limpiar_excel import LimpiarExcel
-from ui.pda import uiPDA
-from ui.correo import Correo
+APP_PORT = 35304
+APP_HOST = "127.0.0.1"
+
+def notify_running_instance():
+    """Devuelve True si logró avisar a una instancia ya corriendo."""
+    try:
+        with socket.create_connection((APP_HOST, APP_PORT), timeout=0.25) as s:
+            s.sendall(b"SHOW")
+        return True
+    except OSError:
+        return False
+
+def start_instance_server(app):
+    """Corre en la instancia principal: escucha mensajes y trae la ventana al frente."""
+    def bring_to_front():
+        try:
+            app.deiconify()
+            app.lift()
+            app.attributes("-topmost", True)
+            app.update_idletasks()
+            app.focus_force()
+            app.after(150, lambda: app.attributes("-topmost", False))
+        except Exception:
+            pass
+
+    def server():
+        srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        srv.bind((APP_HOST, APP_PORT))
+        srv.listen(5)
+
+        while True:
+            conn, _ = srv.accept()
+            try:
+                data = conn.recv(1024)
+                if data.startswith(b"SHOW"):
+                    app.after(0, bring_to_front)
+            finally:
+                try: conn.close()
+                except: pass
+
+    threading.Thread(target=server, daemon=True).start()
+
+from ui.ui_procesador_carpetas import ProcesadorCarpetas
+from ui.ui_limpiar_excel import LimpiarExcel
+from ui.ui_pda import uiPDA
+from ui.ui_correo import Correo
+from ui.ui_scanner.ui_scanner import ScannerContainer
 from utils.config_manager import guardar_correos_config, verificar_estructura, obtener_carpeta_base, guardar_usuario, obtener_usuario
 
 class MenuInicial(ttk.Frame):
-    def __init__(self, master, mostrar_procesador_carpetas, mostrar_limpiar_excel, mostrar_PDA, mostrar_correo, **kwargs):
+    def __init__(
+        self, master,
+        mostrar_procesador_carpetas,
+        mostrar_limpiar_excel,
+        mostrar_PDA,
+        mostrar_correo,
+        mostrar_scanner,
+        **kwargs
+    ):
         super().__init__(master, **kwargs)
 
-        ttk.Label(self, text="AutomatiSCD", font=("Arial", 20, "bold")).pack(pady=40)
+        # Dos columnas iguales
+        self.grid_columnconfigure(0, weight=1, uniform="x")
+        self.grid_columnconfigure(1, weight=1, uniform="x")
 
-        ttk.Button(
+        ttk.Label(
             self,
-            text="Procesador de Carpetas",
+            text="AutomatiSCD",
+            font=("Arial", 20, "bold")
+        ).grid(row=0, column=0, columnspan=2, pady=(30, 25))
+
+        ttk.Button(self, text="Procesador de Carpetas",
             command=mostrar_procesador_carpetas
-        ).pack(pady=5)
+        ).grid(row=1, column=0, padx=10, pady=5, sticky="nsew")
 
-        ttk.Button(
-            self,
-            text="Procesador de Excel",
+        ttk.Button(self, text="Procesador de Excel",
             command=mostrar_limpiar_excel
-        ).pack(pady=5)
-        
-        ttk.Button(
-            self,
-            text="PDA",
+        ).grid(row=1, column=1, padx=10, pady=5, sticky="nsew")
+
+        ttk.Button(self, text="PDA",
             command=mostrar_PDA
-        ).pack(pady=5)
-        
-        ttk.Button(
-            self,
-            text="Correo",
+        ).grid(row=2, column=0, padx=10, pady=5, sticky="nsew")
+
+        ttk.Button(self, text="Correo (en proceso)",
             command=mostrar_correo
-        ).pack(pady=5)
-        
+        ).grid(row=2, column=1, padx=10, pady=5, sticky="nsew")
+
+        ttk.Button(self, text="Scanner",
+            command=mostrar_scanner
+        ).grid(row=3, column=0, columnspan=2, padx=10, pady=5, sticky="nsew")
+
 
 class App(tk.Tk):
     def __init__(self):
@@ -72,7 +128,6 @@ class App(tk.Tk):
         self.registroF = self.carpeta_reporte / "registro_fisico.txt"
         self.registroW = self.carpeta_reporte / "registro_web.txt"
 
-
         self.title("AutoCarpetas SCD")
         
         style = ttk.Style(self)
@@ -97,14 +152,12 @@ class App(tk.Tk):
         archivo_menu.add_command(label="Salir", command=self.destroy)
         menuBar.add_cascade(label="Archivo", menu=archivo_menu)
 
-
         # ================== Herramientas ==================
         herramientas_menu = tk.Menu(menuBar, tearoff=0)
         herramientas_menu.add_command(label="Procesador de Carpetas", command=self.mostrar_procesador_carpetas)
         herramientas_menu.add_command(label="Procesador de Excel", command=self.mostrar_limpiar_excel)
         herramientas_menu.add_command(label="PDA", command=self.mostrar_PDA)
         menuBar.add_cascade(label="Herramientas", menu=herramientas_menu)
-
 
         # ================== Configuración ==================
         config_menu = tk.Menu(menuBar, tearoff=0)
@@ -134,17 +187,21 @@ class App(tk.Tk):
         # Aplicar menú
         self.config(menu=menuBar)
 
-        base_path = getattr(sys, "_MEIPASS", os.path.abspath("."))
-        icon_path = os.path.join(base_path, "assets", "app.ico")
-        
-        self.iconbitmap(icon_path)
+        if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+            base_path = sys._MEIPASS
+        else:
+            base_path = os.path.dirname(os.path.abspath(__file__))
+
+        icon_path = os.path.join(base_path, "assets", "app.png")
+        self.iconphoto(True, PhotoImage(file=icon_path))
 
         self.menu_inicial = MenuInicial(
             self, 
             self.mostrar_procesador_carpetas, 
             self.mostrar_limpiar_excel, 
             self.mostrar_PDA,
-            self.mostrar_correo
+            self.mostrar_correo,
+            self.mostrar_scanner
             )
         
         self.procesador_carpetas = ProcesadorCarpetas(
@@ -164,6 +221,10 @@ class App(tk.Tk):
             self, self.mostrar_menu
         )
         
+        self.scanner = ScannerContainer(
+            self, self.mostrar_menu
+        )
+        
         usuario_guardado = obtener_usuario()
         if usuario_guardado:
             self.usuario = usuario_guardado
@@ -175,12 +236,14 @@ class App(tk.Tk):
     def mostrar_menu(self):
         self._ocultar_todos()
         self.menu_inicial.pack(fill="both", expand=True)
-        self.geometry("400x300")
+        self.update_idletasks()
+        self.geometry("")
         self.resizable(False, False)
 
     def mostrar_procesador_carpetas(self):
         self._ocultar_todos()
         self.procesador_carpetas.pack(fill="both", expand=True)
+        self.update_idletasks()
         self.geometry("900x600")
         self.resizable(False, False)
         
@@ -205,7 +268,13 @@ class App(tk.Tk):
         self.update_idletasks()
         self.geometry("")
         self.resizable(False, False)
-    
+        
+    def mostrar_scanner(self):
+        self._ocultar_todos()
+        self.scanner.pack(fill="both", expand=True)
+        self.geometry("250x150")    
+        self.resizable(False, False)
+        
     def mostrar_config_correo(self):
         self.correo.mostrar_config_correo()
         
@@ -249,4 +318,9 @@ class App(tk.Tk):
         
 
 if __name__ == "__main__":
-    App().mainloop()
+    if notify_running_instance():
+        sys.exit(0)
+
+    app = App()
+    start_instance_server(app) 
+    app.mainloop()
