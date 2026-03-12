@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, PhotoImage
 import os, sys, threading, socket
+from utils.paths import resource_path
 
 APP_PORT = 35304
 APP_HOST = "127.0.0.1"
@@ -51,6 +52,7 @@ from ui.ui_pda import uiPDA
 from ui.ui_correo import Correo
 from ui.ui_scanner.ui_scanner import ScannerContainer
 from utils.config_manager import guardar_correos_config, verificar_estructura, obtener_carpeta_base, guardar_usuario, obtener_usuario
+from utils.version_manager import mostrar_novedades_si_corresponde
 
 class MenuInicial(ttk.Frame):
     def __init__(
@@ -101,23 +103,14 @@ class App(tk.Tk):
         
         self.usuario = None
         self.usuario_var = tk.StringVar()
-        
-        self.carpeta_base = obtener_carpeta_base(self)
+            
+        self.carpeta_base = obtener_carpeta_base()
 
         if self.carpeta_base is None:
             messagebox.showinfo("Cerrando", "No se seleccionó una ruta válida. La aplicación se cerrará.")
             self.destroy()
             return
         
-        if self.carpeta_base:
-            errores = verificar_estructura(self.carpeta_base)
-
-            if errores:
-                messagebox.showerror(
-                    "Estructura incorrecta",
-                    "\n".join(errores)
-                )
-
         # Subcarpetas
         self.carpeta_pdas = self.carpeta_base / "PDA"
         self.carpeta_reporte = self.carpeta_base / "Registro" 
@@ -187,13 +180,9 @@ class App(tk.Tk):
         # Aplicar menú
         self.config(menu=menuBar)
 
-        if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
-            base_path = sys._MEIPASS
-        else:
-            base_path = os.path.dirname(os.path.abspath(__file__))
-
-        icon_path = os.path.join(base_path, "assets", "app.png")
-        self.iconphoto(True, PhotoImage(file=icon_path))
+        img_path = resource_path("assets", "app.png")
+        
+        self.iconphoto(True, PhotoImage(file=img_path))
 
         self.menu_inicial = MenuInicial(
             self, 
@@ -226,10 +215,12 @@ class App(tk.Tk):
         )
         
         usuario_guardado = obtener_usuario()
+        
         if usuario_guardado:
             self.usuario = usuario_guardado
             self.usuario_var.set(usuario_guardado)
             self.mostrar_menu()
+            self.after(300, mostrar_novedades_si_corresponde)
         else:
             self.mostrar_login()
 
@@ -272,7 +263,7 @@ class App(tk.Tk):
     def mostrar_scanner(self):
         self._ocultar_todos()
         self.scanner.pack(fill="both", expand=True)
-        self.geometry("250x150")    
+        self.geometry("300x150")    
         self.resizable(False, False)
         
     def mostrar_config_correo(self):
@@ -285,9 +276,23 @@ class App(tk.Tk):
         self.correo.config_avanzada()
     
     def _ocultar_todos(self):
-        for widget in self.winfo_children():
-            widget.pack_forget()
-            
+        for w in self.winfo_children():
+
+            if isinstance(w, tk.Toplevel):
+                w.withdraw()
+                continue
+
+            mgr = w.winfo_manager()
+
+            if mgr == "pack":
+                w.pack_forget()
+
+            elif mgr == "grid":
+                w.grid_remove()  
+
+            elif mgr == "place":
+                w.place_forget()
+                
     def mostrar_login(self):
         self.login_frame = ttk.Frame(self, padding=50)
         self.login_frame.grid(row=0, column=0, sticky="nsew")
@@ -298,24 +303,26 @@ class App(tk.Tk):
         self.entry_usuario = ttk.Entry(
             self.login_frame, width=30, textvariable=self.usuario_var
         )
-        self.entry_usuario.grid(row=1, column=0, pady=5)
-        self.entry_usuario.focus()
+        self.entry_usuario.grid(row=0, column=1, pady=5)
+
+        self.entry_usuario.focus_set()
 
         btn = ttk.Button(self.login_frame, text="Entrar", command=self.on_login)
-        btn.grid(row=2, column=0, pady=10)
+        btn.grid(row=2, column=0, columnspan=2, pady=10)
+
             
     def on_login(self):
         nombre = self.usuario_var.get().strip()
         if not nombre:
             messagebox.showerror("Error", "Ingresa un nombre válido")
             return
-
+        
         self.usuario = nombre
         guardar_usuario(nombre)  
-
+    
         self.login_frame.destroy()
         self.mostrar_menu()
-        
+        self.after(300, mostrar_novedades_si_corresponde)
 
 if __name__ == "__main__":
     if notify_running_instance():

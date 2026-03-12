@@ -1,80 +1,98 @@
-# ui/scanner/ui_scanner.py
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk
 
-class ScannerMenu(ttk.Frame):
-    def __init__(self, master, ir_conexos, ir_obras, on_volver_menu, **kwargs):
-        super().__init__(master, **kwargs)
+from ui.ui_scanner.components.conexos.ui_conexos import ScannerConexos
+from ui.ui_scanner.components.obras.ui_obras_selector import ObrasSelector
+from ui.ui_scanner.components.obras.ui_obras_main import ObrasMain
+from ui.ui_scanner.components.cue_sheets.ui_cue_sheets_selector import CueSheetsSelector
+from ui.ui_scanner.components.cue_sheets.ui_cue_sheets_main import CueSheetsMain
 
-        main = ttk.Frame(self, padding=10)
-        main.pack(fill="both", expand=True)
-
-        ttk.Button(main, text="⬅ Volver al menú", command=on_volver_menu).pack(
-            anchor="w", padx=10, pady=(10, 0)
-        )
-
-        frm = ttk.Frame(main, padding=10)
-        frm.pack(fill="x")
-
-        self.frame_botones = ttk.Frame(frm)
-        self.frame_botones.grid(row=0, column=0, sticky="w", pady=(0, 10))
-
-        ttk.Button(self.frame_botones, text="Conexos", command=ir_conexos)\
-            .grid(row=1, column=0, padx=10, pady=5, sticky="nsew")
-
-        ttk.Button(self.frame_botones, text="Obras", command=ir_obras)\
-            .grid(row=1, column=1, padx=10, pady=5, sticky="nsew")
-
-
-from ui.ui_scanner.components.ui_conexos import ScannerConexos
-from ui.ui_scanner.components.ui_obras_sgae import ScannerObrasSGAE
 
 class ScannerContainer(ttk.Frame):
-    def __init__(self, master, on_volver_menu_principal, **kwargs):
+    def __init__(self, master, on_volver_menu, **kwargs):
         super().__init__(master, **kwargs)
 
-        # Pantallas
-        self.menu_scanner = ScannerMenu(
-            self,
-            ir_conexos=self.mostrar_conexos,
-            ir_obras=self.mostrar_obras,
-            on_volver_menu=on_volver_menu_principal,
+        # Layout del container
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_columnconfigure(1, weight=0)
+        self.grid_rowconfigure(2, weight=1)
+
+        ttk.Button(self, text="⬅ Volver al menú", command=on_volver_menu).grid(
+            row=0, column=0, columnspan=2, sticky="w", padx=10, pady=(10, 0)
         )
 
-        self.conexos = ScannerConexos(self, on_volver_menu=self.mostrar_menu)
-        self.obrasSGAE = ScannerObrasSGAE(self, on_volver_menu=self.mostrar_menu)
+        # Selector principal (izquierda)
+        self.mb = ttk.Menubutton(self, text="Seleccionar")
+        menu = tk.Menu(self.mb, tearoff=0)
+        self.mb["menu"] = menu
+        for s in ["CONEXOS", "OBRAS", "CUE-SHEETS"]:
+            menu.add_command(label=s, command=lambda s=s: self.cargar_modulo(s))
+        self.mb.grid(row=1, column=0, sticky="w", padx=10, pady=10)
 
-        # self.obras = ttk.Frame(self, padding=20)
-        # ttk.Label(self.obras, text="Scanner Obras (en construcción)").pack()
-        # ttk.Button(self.obras, text="⬅ Volver", command=self.mostrar_menu_scanner).pack(pady=10)
+        # Slot derecho para selectores
+        self.frmSelect = ttk.Frame(self)
+        self.frmSelect.grid(row=1, column=1, sticky="w", padx=10, pady=10)
+        self.frmSelect.grid_remove()
 
-        self.mostrar_menu()
+        # Body principal
+        self.body = ttk.Frame(self)
+        self.body.grid(row=2, column=0, sticky="nsew", padx=10, pady=10)
+        self.body.grid_rowconfigure(0, weight=1)
+        self.body.grid_columnconfigure(0, weight=1)
 
-    def _ocultar_todos(self):
-        for widget in self.winfo_children():
-            widget.pack_forget()
+        # Vistas grandes (van en body)
+        self.conexos = ScannerConexos(self.body)
+        self.obras_main = ObrasMain(self.body)
+        self.cue_sheets_main = CueSheetsMain(self.body)
 
-    def mostrar_menu(self):
-        self._ocultar_todos()
-        self.menu_scanner.pack(fill="both", expand=True)
-        self.master.update_idletasks()
-        self.master.geometry("250x150")
-        self.master.resizable(False, False)
+        self.vistas = {
+            "CONEXOS": self.conexos,
+            "OBRAS": self.obras_main,
+            "CUE-SHEETS": self.cue_sheets_main,
+        }
 
-    def mostrar_conexos(self):
-        self._ocultar_todos()
-        self.conexos.pack(fill="both", expand=True)
+        # Selectores (viven en frmSelect)
+        self.obras_selector = ObrasSelector(self.frmSelect, on_select=self.on_select_sociedad)
+        self.obras_selector.grid(row=0, column=0, sticky="w")
+        self.obras_selector.grid_remove()
+
+        self.cue_sheets_selector = CueSheetsSelector(self.frmSelect, on_select=self.on_select_cs)
+        self.cue_sheets_selector.grid(row=0, column=0, sticky="w")
+        self.cue_sheets_selector.grid_remove()
+
+    def ocultar_todo(self):
+        for v in self.vistas.values():
+            v.grid_remove()  # mejor que grid_forget()
+
+    def _ocultar_selectores(self):
+        self.obras_selector.grid_remove()
+        self.cue_sheets_selector.grid_remove()
+
+    def on_select_sociedad(self, sociedad: str):
+        self.obras_main.cargar(sociedad)
         self.master.update_idletasks()
         self.master.geometry("")
-        self.master.resizable(False, False)
 
-    def mostrar_obras(self):
-        self._ocultar_todos()
-        self.obrasSGAE.pack(fill="both", expand=True)
+    def on_select_cs(self, sociedad: str):
+        self.cue_sheets_main.cargar(sociedad)
         self.master.update_idletasks()
         self.master.geometry("")
-        self.master.resizable(False, False)
-        
 
-        
+    def cargar_modulo(self, modulo: str):
+        # Manejo del panel derecho (selectores)
+        self.frmSelect.grid_remove()
+        self._ocultar_selectores()
 
+        if modulo == "OBRAS":
+            self.frmSelect.grid()
+            self.obras_selector.grid()
+        elif modulo == "CUE-SHEETS":
+            self.frmSelect.grid()
+            self.cue_sheets_selector.grid()
+
+        # Mostrar la vista principal
+        self.ocultar_todo()
+        self.vistas[modulo].grid(row=0, column=0, sticky="nsew")
+
+        self.master.update_idletasks()
+        self.master.geometry("")

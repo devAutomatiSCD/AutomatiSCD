@@ -2,10 +2,10 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from tkinter.scrolledtext import ScrolledText
 
-from logic.logic_pda import find, save, firstPDA, exportarExcel, crearRegistro
+from logic.logic_pda import find, save, firstPDA, exportarExcel
 from utils.config_manager import obtener_usuario
 from datetime import datetime
-from utils.log_manager import escribir_log, validar_log
+from utils.log_manager import escribir_log
 
 class uiPDA(ttk.Frame):
     def __init__(self, master, on_volver_menu, ruta_pda_f, ruta_pda_w, ruta_registro_web, ruta_registro_fisico, **kwargs):
@@ -126,14 +126,8 @@ class uiPDA(ttk.Frame):
             nuevo_pda = firstPDA(self.ruta_pdaW)
             self.datoFirstPDAW.set(nuevo_pda)
             detalles = f"PDAs creados {self.PDAs[0]}...{self.PDAs[-1]}"
-            try:
-                validar_log(self.ruta_registro_web)
-            except ValueError as e:
-                messagebox.showerror("Advertencia", f"El log de PDA fue alterado:\n{e}")
-                return 0;
+            
             escribir_log(self.ruta_registro_web, obtener_usuario(), accion="Crear_PDA", detalles=detalles)
-            # crearRegistro(self.ruta_registro_web, 
-            #                 f"{obtener_usuario()} creo {len(self.PDAs)} PDAs, ({self.PDAs[0]}...{self.PDAs[-1]}) el {self.ahora.strftime("%d-%m-%Y")} a las {self.ahora.strftime("%H:%M:%S")}")
             
         elif self.activoPDAF.get():
             guardado = save(self.PDAs, self.ruta_pdaF)
@@ -144,14 +138,9 @@ class uiPDA(ttk.Frame):
             nuevo_pda = firstPDA(self.ruta_pdaF)
             self.datoFirstPDAF.set(nuevo_pda)
             detalles = f"PDAs creados {self.PDAs[0]}...{self.PDAs[-1]}"
-            try:
-                validar_log(self.ruta_registro_fisico)
-            except ValueError as e:
-                messagebox.showerror("Advertencia", f"El log de PDA fue alterado:\n{e}")
-                return 0;
+            
             escribir_log(self.ruta_registro_web, obtener_usuario(), accion="Crear_PDA", detalles=detalles)
-            # crearRegistro(self.ruta_registro_fisico, 
-            #                 f"{obtener_usuario()} creo {len(self.PDAs)} PDAs, ({self.PDAs[0]}...{self.PDAs[-1]}) el {self.ahora.strftime("%d-%m-%Y")} a las {self.ahora.strftime("%H:%M:%S")}")
+        
         else:
             notificacion = tk.Toplevel(self)
             notificacion.title("Aviso")

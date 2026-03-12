@@ -1,37 +1,51 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from threading import Thread, Event
+from utils.image_tooltip import ImageTooltip
+from utils.paths import resource_path
+from PIL import Image, ImageTk
 
-from logic.logic_scanner.logic_obrasSGAE import scanner
+from logic.logic_scanner.logic_obrasPEER import scanner
 
-class ScannerObrasSGAE(ttk.Frame):
-    def __init__(self, master, on_volver_menu, **kwargs):
+class ScannerObrasPEER(ttk.Frame):
+    def __init__(self, master, **kwargs):
         super().__init__(master, **kwargs)
-
+        
         self.var_ruta_pdf = tk.StringVar()
         self.var_folio = tk.StringVar()
         
         self.stop_event = Event()
         self.trabajando = False
 
-        main = ttk.Frame(self, padding=20)
+        main = ttk.Frame(self)
         main.pack(fill="both", expand=True)
-
-        ttk.Button(main, text="⬅ Volver al menú", command=on_volver_menu).pack(
-            anchor="w", padx=10, pady=(10, 0)
-        )
 
         frm = ttk.Frame(main, padding=10)
         frm.pack(fill="x")
         frm.grid_columnconfigure(1, weight=1)
         
-        ttk.Label(frm, text="Archivo obras SGAE (.pdf): ").grid(row=0, column=0, sticky="e", padx=5, pady=5)
+        ttk.Label(frm, text="Archivo obras PEER (.pdf): ").grid(row=0, column=0, sticky="e", padx=5, pady=5)
         ttk.Entry(frm, textvariable=self.var_ruta_pdf, width=70).grid(
             row=0, column=1, sticky="we", padx=5, pady=5
         )
         ttk.Button(frm, text="Elegir...", command=self.elegir_pdf).grid(row=0, column=2, padx=5, pady=5)
         
-        ttk.Label(frm, text="Folio:").grid(row=1, column=0, sticky="e", padx=5, pady=5)
+        icono_path = resource_path("assets", "info.png")
+
+        img = Image.open(icono_path)
+        img = img.resize((24, 24), Image.LANCZOS)
+        self.help_icon_img = ImageTk.PhotoImage(img)
+        
+        self.btn_help = ttk.Label(frm, image=self.help_icon_img, cursor="hand2")
+        self.btn_help.grid(row=0, column=3, padx=(6, 0), pady=5, sticky="w")
+        
+        self.tooltip = ImageTooltip(
+            self.btn_help,
+            image_path=resource_path("assets", "info_obras", "peer", "img1.png"),
+            text="El PDF debe contener esta estructura\n para que se pueda procesar"
+        )
+        
+        ttk.Label(frm, text="N° GLPI:").grid(row=1, column=0, sticky="e", padx=5, pady=5)
         ttk.Entry(frm, textvariable=self.var_folio, width=10).grid(row=1, column=1, sticky="w", padx=5, pady=5)
         
         btns = ttk.Frame(main, padding=(10, 0))
@@ -59,10 +73,14 @@ class ScannerObrasSGAE(ttk.Frame):
             return
 
         ruta_boletines = self.var_ruta_pdf.get().strip()
+        folio = self.var_folio.get().strip()
         
         if not ruta_boletines:
             messagebox.showwarning("Atención", "Debe seleccionar un archivo PDF.")
             return
+        
+        if not folio:
+            messagebox.showwarning("Atención", "Debe ingresar folio")
         
         self.stop_event.clear()
 
@@ -74,7 +92,7 @@ class ScannerObrasSGAE(ttk.Frame):
         self.btn_cancel.config(state="normal")
 
         def worker():
-            res = scanner(ruta_boletines, stop_event=self.stop_event)
+            res = scanner(ruta_boletines, folio, stop_event=self.stop_event)
             self.after(0, lambda: self._fin_trabajo(res))
 
         Thread(target=worker, daemon=True).start()

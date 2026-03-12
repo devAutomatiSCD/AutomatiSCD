@@ -21,44 +21,57 @@ def cargar_config():
 def guardar_config(cfg):
     with open(RUTA_CONFIG, "w", encoding="utf-8") as f:
         json.dump(cfg, f, indent=4, ensure_ascii=False)
+        
+CARPETA_BASE_DEFAULT = Path(r"M:\Documentacion\publica\AutomatiSCD")    
 
-def obtener_carpeta_base(root):
-    while True:
-        cfg = cargar_config()
-        carpeta_guardada = cfg.get("carpeta_base")
+def obtener_carpeta_base():
+    cfg = cargar_config()
 
-        if carpeta_guardada and Path(carpeta_guardada).exists():
-            return Path(carpeta_guardada)
-
-        if carpeta_guardada and not Path(carpeta_guardada).exists():
-            messagebox.showwarning(
-                "Carpeta base no válida",
-                "La carpeta base ya no existe o fue movida.\nSelecciona una nueva."
-            )
-        else:
-            messagebox.showinfo(
-                "Seleccionar carpeta base",
-                "Selecciona la carpeta BASE que contiene Reporte y PDAs."
-            )
-
-        carpeta = filedialog.askdirectory(
-            initialdir="C:/",
-            title="Seleccionar carpeta base"
-        )
-
-        if not carpeta:
-            reintentar = messagebox.askyesno(
-                "Sin carpeta seleccionada",
-                "¿Quieres volver a intentar?"
-            )
-            if reintentar:
-                continue
-            else:
-                return None
-        else:
-            cfg["carpeta_base"] = carpeta
+    # 1. Intentar ruta fija
+    if CARPETA_BASE_DEFAULT.exists():
+        errores = verificar_estructura(CARPETA_BASE_DEFAULT)
+        if not errores:
+            cfg["carpeta_base"] = str(CARPETA_BASE_DEFAULT)
             guardar_config(cfg)
-            return Path(carpeta)
+            return CARPETA_BASE_DEFAULT
+
+    # 2. Intentar ruta guardada en config
+    carpeta_guardada = cfg.get("carpeta_base")
+    if carpeta_guardada:
+        ruta = Path(carpeta_guardada)
+        if ruta.exists():
+            errores = verificar_estructura(ruta)
+            if not errores:
+                return ruta
+
+    # 3. Si no existe la unidad M o movieron la carpeta
+    messagebox.showwarning(
+        "Carpeta no encontrada",
+        "No se encontró la carpeta base en o no esta conectado a la VPN:\n\n"
+        f"{CARPETA_BASE_DEFAULT}\n\n"
+        "Selecciona dónde está ahora."
+    )
+
+    carpeta = filedialog.askdirectory(title="Seleccionar carpeta AutomatiSCD")
+
+    if not carpeta:
+        return None
+
+    carpeta_path = Path(carpeta)
+    errores = verificar_estructura(carpeta_path)
+
+    if errores:
+        messagebox.showerror(
+            "Estructura incorrecta",
+            "\n".join(errores)
+        )
+        return None
+
+    cfg["carpeta_base"] = str(carpeta_path)
+    guardar_config(cfg)
+
+    return carpeta_path
+
 
 def verificar_estructura(carpeta_base: Path):
     errores = []
@@ -68,17 +81,12 @@ def verificar_estructura(carpeta_base: Path):
         "PDA": carpeta_base / "PDA",
     }
 
-    # for nombre, ruta in carpetas.items():
-    #     if not ruta.exists():
-    #         errores.append(f"Falta carpeta: {nombre}")
-    #         continue
-
-    #     txts = list(ruta.glob("*.txt"))
-    #     if len(txts) < 2:
-    #         errores.append(f"{nombre} debe tener al menos 2 archivos .txt (tiene {len(txts)})")
-
+    for nombre, ruta in carpetas.items():
+        if not ruta.exists():
+            errores.append(f"Falta carpeta: {nombre}")
+            continue
+        
     return errores
-
 
 def guardar_usuario(usuario: str):
     cfg = cargar_config()
@@ -90,6 +98,14 @@ def obtener_usuario():
     cfg = cargar_config()
     return cfg.get("usuario")
 
+def set_api_key(API_KEY: str):
+    cfg = cargar_config()
+    cfg["API_KEY"] = API_KEY
+    guardar_config(cfg)
+    
+def obtener_API_KEY():
+    cfg = cargar_config()
+    return cfg.get("API_KEY")
 
 def guardar_correos_config(usuario, email):
     cfg = cargar_config()
@@ -112,6 +128,7 @@ def guardar_correos_config(usuario, email):
         cfg["correos_destino"] = lista
         guardar_config(cfg)
         return True
+    
 def guardar_cuerpo_config(nombre, cuerpo):
     cfg = cargar_config()
     
@@ -133,4 +150,11 @@ def guardar_cuerpo_config(nombre, cuerpo):
         guardar_config(cfg)
         return True
     
-    
+def guardar_version_vista(version: str):
+    cfg = cargar_config()
+    cfg["ultima_version_vista"] = version
+    guardar_config(cfg)
+
+def obtener_version_vista():
+    cfg = cargar_config()
+    return cfg.get("ultima_version_vista")

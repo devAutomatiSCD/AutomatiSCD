@@ -4,3 +4,82 @@ __pycache__/
 *.pyc
 build*
 version_info*
+
+# =========================
+# Python cache
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# =========================
+# Virtual environments
+# =========================
+venv/
+env/
+.venv/
+ENV/
+
+# =========================
+# Build / packaging
+# =========================
+build/
+dist/
+*.spec
+
+# PyInstaller temp
+*.manifest
+*.log
+
+# =========================
+# OS basura
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# IDE
+# =========================
+.vscode/
+.idea/
+
+# =========================
+# Python test / coverage
+# =========================
+.coverage
+.pytest_cache/
+htmlcov/
+
+# =========================
+# Logs
+# =========================
+*.log
+
+# =========================
+# Local config
+# =========================
+.env
+.env.*
+config.local.json
+
+# =========================
+# Tu config local de app
+# =========================
+config.json
+
+# =========================
+# archivos generados
+# =========================
+*.csv
+*.xlsx
+*.tmp
+
+# =========================
+# caches de librerías
+# =========================
+.cache/
+
+# =========================
+# pdf temporales
+# =========================
+*.pdf.tmp

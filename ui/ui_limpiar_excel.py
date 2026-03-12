@@ -1,14 +1,8 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-from tkinter.scrolledtext import ScrolledText
 from threading import Thread, Event
-from queue import Queue, Empty
-from pathlib import Path
-import argparse
-import pandas as pd
-import re
 
-from logic.logic_le import procesar_excel
+from logic.logic_le import procesar_excel_a_csv
 
 class LimpiarExcel(ttk.Frame):
     def __init__(self, master, on_volver_menu, **kwargs):
@@ -22,7 +16,6 @@ class LimpiarExcel(ttk.Frame):
         )
         
         self.var_excel = tk.StringVar()
-        self.var_destino = tk.StringVar()
         self.trabajando = False
         
         frm = ttk.Frame(main, padding=10)
@@ -36,11 +29,6 @@ class LimpiarExcel(ttk.Frame):
         ent_excel = ttk.Entry(frm, textvariable=self.var_excel, width=70)
         ent_excel.grid(row=0, column=1, sticky="we", padx=5, pady=5)
         ttk.Button(frm, text="Elegir...", command=self.elegir_excel).grid(row=0, column=2, padx=5, pady=5)
-
-        ttk.Label(frm, text="Carpeta destino:").grid(row=1, column=0, sticky="e", padx=5, pady=5)
-        ent_dest = ttk.Entry(frm, textvariable=self.var_destino, width=70)
-        ent_dest.grid(row=1, column=1, sticky="we", padx=5, pady=5)
-        ttk.Button(frm, text="Elegir...", command=self.elegir_destino).grid(row=1, column=2, padx=5, pady=5)
 
         btns = ttk.Frame(main, padding=(10, 0))
         btns.pack(fill="x")
@@ -70,31 +58,41 @@ class LimpiarExcel(ttk.Frame):
         # self.stop_event.clear()
         
         ruta_excel = self.var_excel.get().strip()
-        ruta_destino = self.var_destino.get().strip()
+    
+        def worker():
+            res = procesar_excel_a_csv(ruta_excel)
+            self.after(0, lambda: self._fin_trabajo(res))
 
-        res = procesar_excel(ruta_excel, ruta_destino)
-        
-        if res:
-            self.mess(res[1])
+        Thread(target=worker, daemon=True).start()
         
     def on_cancel(self):
         if self.trabajando:
             self.stop_event.set()        
             # self.queue_logs.put(" Solicitando cancelación...")
             
-    def mess(self, ruta_salida):
-        ventana = tk.Toplevel()
-        ventana.title("Notificación")
+    def _fin_trabajo(self, res):
+        self.trabajando = False
         
-        ventana.update_idletasks()
-        ventana.geometry("")
-        ventana.resizable(False, False)
+        self.btn_run.config(state="normal")
+        self.btn_cancel.config(state="disabled")
+
+        if res.get("cancelado"):
+            # self.queue_logs.put("Proceso cancelado por el usuario.")
+            return
         
-        frm = ttk.Frame(ventana)
-        frm.pack(fill="both", expand=True)
+        if isinstance(res, dict) and res.get("ok"):
+            ruta = res.get("ruta_salida", "desconocida")
+            
+            messagebox.showinfo("Éxito", f"Archivo procesado exitosamente:\n{ruta}")
+            
+            alerta = res.get("alerta", [])
+            
+            if alerta:
+                mensaje_alerta = "Alerta: Se encontraron filas con IPI faltante.\n"
+                mensaje_alerta += "\n".join(alerta)
+                messagebox.showinfo("Atención", mensaje_alerta)
         
-        lbl = ttk.Label(frm, textvariable=f"Archivo limpiado con exito \n Guardado en {ruta_salida}", padding=10)
-        lbl.pack(pady=20) 
+            
         
         
 

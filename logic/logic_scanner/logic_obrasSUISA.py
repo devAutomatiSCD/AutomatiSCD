@@ -21,11 +21,13 @@ def parse_porcentaje(p):
     }
 
 def parse_ipi(p):
+    p = p.replace(" ", "")
+    p= p.lstrip("0")
     return p.replace(".", "").strip()
 
 def parse_name(n: str) -> str:
     n = n.replace("\n", " ").replace("\r", " ")
-    n = re.sub(r"\s+PAG\.\-\s*\d+$", "", n)
+    n = n.replace("Title", "").replace("Subtitle", "")
 
     n = unicodedata.normalize("NFD", n)
     n = n.encode("ascii", "ignore").decode("utf-8")
@@ -158,7 +160,7 @@ def export_excel(obras, folio, stop_event=None):
     
     carpeta_base = obtener_carpeta_base()
     
-    ruta_destino = carpeta_base / "MMs" / f"mm_sgae_{folio}.csv"
+    ruta_destino = carpeta_base / "MMs" / f"mm_suisa_{folio}.csv"
     
     with open(
         ruta_destino,

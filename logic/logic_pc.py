@@ -6,11 +6,9 @@ import google.generativeai as genai
 from docx2pdf import convert
 import os
 from copy import copy
+from utils.config_manager import obtener_API_KEY
 
-api_key = os.getenv("GEMINI_API_KEY")
-
-if not api_key:
-    raise ValueError("⚠️ No se encontró la variable de entorno GEMINI_API_KEY. Configúrala antes de ejecutar el programa.")
+api_key = "AIzaSyB2tL9E5GD_C38G5uvAatyu9RuFVfu_lVs"
 
 genai.configure(api_key=api_key)
 model = genai.GenerativeModel("gemini-2.5-flash")
