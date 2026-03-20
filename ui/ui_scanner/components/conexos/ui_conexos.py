@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from threading import Thread, Event
 
-from logic.logic_scanner.logic_conexos import escanear_pdf_CM
+from logic.logic_scanner.conexos.logic_conexos import escanear_pdf_CM
 
 class ScannerConexos(ttk.Frame):
     def __init__(self, master, **kwargs):

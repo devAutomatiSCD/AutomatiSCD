@@ -1,5 +1,5 @@
 from tkinter import ttk
-from ui.ui_scanner.components.cue_sheets.components.ui_cs_nacional import ScannerCueSheetsAmazon
+from ui.ui_scanner.components.cuesheets.components.ui_cs_amazonNac import ScannerCueSheetsAmazon
 
 class CueSheetsMain(ttk.Frame):
     def __init__(self, master, **kwargs):

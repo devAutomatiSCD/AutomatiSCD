@@ -33,10 +33,12 @@ def parse_name(n: str) -> str:
     return re.sub(r"\s+", " ", n).strip()
 
 def parse_pct(v: str) -> float:
-    if v is None:
+    if not v:
         return 0.0
-    # "12,50" -> 12.5
-    return float(v.replace(",", "."))
+    try:
+        return float(v.replace(",", ".").strip())
+    except ValueError:
+        return 0.0
 
 def fmt_pct(v: float) -> str:
     # 12.5 -> "12,50"
@@ -52,6 +54,26 @@ def normalizar_nombre(texto: str) -> str:
     texto = re.sub(r"\s+", " ", texto).strip()
 
     return texto
+
+def revisar_porcentajes(obras: dict):
+    alertas = []
+
+    for obra in obras.values():
+        titulo = obra.get("obra") or "(sin título)"
+        iswc = obra.get("iswc") or "(sin ISWC)"
+
+        reparto = obra.get("reparto", {}).values()
+
+        suma_p = sum(r.get("porcentaje_1", 0.0) for r in reparto)
+        suma_m = sum(r.get("porcentaje_2", 0.0) for r in reparto)
+
+        suma_p = round(suma_p, 2)
+        suma_m = round(suma_m, 2)
+
+        if abs(suma_p - 100) > 0.01 or (suma_m > 0 and abs(suma_m - 100) > 0.01):
+            alertas.append((titulo, iswc, suma_p, suma_m))
+
+    return alertas
 
 # =========================
 # Scanner
@@ -135,11 +157,19 @@ def scanner(ruta_pdf, folio, stop_event=None):
                         "porcentaje_1": p1,
                         "porcentaje_2": p2,
                     }
+                    
+    alertas = revisar_porcentajes(obras)
+    cantidad_obras = len(obras)
 
-    export = export_excel(obras, folio, stop_event=stop_event)
-    
-    if export:
-        return True
+    res = export_excel(obras, folio, stop_event=stop_event)
+
+    if res.get("ok"):
+        return {
+            "ok": True,
+            "alertas": alertas,
+            "cantidad_obras": cantidad_obras,
+            "ruta_destino": res.get("ruta_destino")
+        }
     
 # =========================
 # Export
@@ -150,45 +180,52 @@ def export_excel(obras, folio, stop_event=None):
     def check_cancel():
         return stop_event is not None and stop_event.is_set()
     
-    # escritorio = os.path.join(
-    #     os.path.expanduser("~"),
-    #     r"OneDrive - Sociedad Chilena de Autores e Interpretes Musicales\Escritorio"
-    # )
-    # os.makedirs(escritorio, exist_ok=True)
-    
     carpeta_base = obtener_carpeta_base()
-    
     ruta_destino = carpeta_base / "MMs" / f"mm_sgae_{folio}.csv"
     
-    with open(
-        ruta_destino,
-        "w",
-        newline="",
-        encoding="latin-1"
-    ) as f:
+    fila_por_obra = {}
+    fila = 1
+    
+    with open(ruta_destino, "w", newline="", encoding="latin-1") as f:
         writer = csv.writer(f, delimiter=";")
 
-        for _, datas in obras.items():
+        for key, datas in obras.items():
             if check_cancel():
                 return {"cancelado": True}
-            # Título de obra (estructura compatible SCD)
+
+            fila_por_obra[key] = fila
+
             writer.writerow([normalizar_nombre(datas["obra"]), "", "", "", "", ""])
+            fila += 1
+
             writer.writerow([])
             writer.writerow([])
             writer.writerow([])
+            fila += 3
+
+            suma_m_obra = round(
+                sum((x.get("porcentaje_2") or 0.0) for x in datas["reparto"].values()),
+                2
+            )
+            mostrar_m = suma_m_obra > 0
 
             for ipi, r in datas["reparto"].items():
                 if check_cancel():
                     return {"cancelado": True}
+
+                m_cell = fmt_pct(r["porcentaje_2"]) if mostrar_m else ""
+
                 writer.writerow([
                     r["caes"],
                     r["nombre"],
                     fmt_pct(r["porcentaje_1"]),
-                    fmt_pct(r["porcentaje_2"]),
+                    m_cell,
                     "",
                     ipi,
                 ])
+                fila += 1
 
             writer.writerow([])
+            fila += 1
             
-    return True
+    return {"fila_por_obra": fila_por_obra, "ok": True, "ruta_destino": ruta_destino}

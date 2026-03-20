@@ -1,7 +1,5 @@
-import pdfplumber, re, csv, os
+import pdfplumber, re, csv, os, unicodedata
 from utils.config_manager import obtener_carpeta_base
-
-carpeta_pdfs = r"C:\Users\mzunigam\OneDrive - Sociedad Chilena de Autores e Interpretes Musicales\Documentos\SCD Doc\Aut Nacional\Pruebas\Formatos Obras\AGADU"
 
 def extraer_pdfs(ruta):
     obras = []
@@ -76,6 +74,35 @@ def fmt_pct(v: float) -> str:
     # 12.5 -> "12,50"
     return f"{v:.2f}".replace(".", ",")
 
+def revisar_porcentajes(obras: list):
+    alertas = []
+
+    for obra in obras:
+        titulo = obra.get("nombre_obra") or "(sin título)"
+        iswc = obra.get("iswc") or "(sin ISWC)"
+
+        suma_p = sum(r.get("pct1", 0.0) for r in obra.get("reparto", []))
+        suma_m = sum(r.get("pct2", 0.0) for r in obra.get("reparto", []))
+
+        suma_p = round(suma_p, 2)
+        suma_m = round(suma_m, 2)
+
+        if abs(suma_p - 100) > 0.01 or (suma_m > 0 and abs(suma_m - 100) > 0.01):
+            alertas.append((titulo, iswc, suma_p, suma_m))
+
+    return alertas
+
+def normalizar_nombre(texto: str) -> str:
+    texto = unicodedata.normalize("NFKD", texto)
+    
+    texto = "".join(c for c in texto if not unicodedata.combining(c))
+    
+    texto = re.sub(r"[^A-Za-z\s]", "", texto)
+    
+    texto = re.sub(r"\s+", " ", texto).strip()
+
+    return texto
+
 # =========================
 # Scanner
 # =========================
@@ -86,64 +113,69 @@ def scanner(ruta_pdf, folio, stop_event=None):
         return stop_event is not None and stop_event.is_set()
     
     obras_pdf = extraer_pdfs(ruta_pdf)
-    
     obras = []
     
     for ruta in obras_pdf:
         if check_cancel():
             return {"cancelado": True}
+
         with pdfplumber.open(ruta) as pdf:
-            
-            texto = "\n".join(
-                    page.extract_text() or "" for page in pdf.pages
-                )
-        
-            DHs = parse_lines(texto)
-            
-            obra = {
-                "nombre_obra": DHs[0]["nombre_obra"],
-                "reparto": {}
-            }
-        
-            for item in DHs:
+            texto = "\n".join(page.extract_text() or "" for page in pdf.pages)
 
-                ipi = parse_ipi(item["ipi"])
-                nombre = parse_name(item["nombre"])
-                tipo = item["tipo"]
+        DHs = parse_lines(texto)
 
-                pct1 = item["pairs"][0][1]
-                pct2 = item["pairs"][1][1]
+        if not DHs:
+            continue
 
-                if ipi in obra["reparto"]:
-                    obra["reparto"][ipi]["pct1"] += pct1
-                    obra["reparto"][ipi]["pct2"] += pct2
-                else:
-                    obra["reparto"][ipi] = {
-                        "tipo": tipo,
-                        "nombre": nombre,
-                        "pct1": pct1,
-                        "pct2": pct2,
-                    }
-                    
-            obra["reparto"] = [
-                {
-                    "tipo": data["tipo"],
-                    "nombre": data["nombre"],
-                    "porcentajes": (
-                        fmt_pct(data["pct1"]),
-                        fmt_pct(data["pct2"])
-                    ),
-                    "ipi": ipi
+        obra = {
+            "nombre_obra": DHs[0]["nombre_obra"],
+            "reparto": {}
+        }
+
+        for item in DHs:
+            ipi = parse_ipi(item["ipi"])
+            nombre = parse_name(item["nombre"])
+            tipo = item["tipo"]
+
+            pct1 = item["pairs"][0][1] if len(item["pairs"]) > 0 else 0.0
+            pct2 = item["pairs"][1][1] if len(item["pairs"]) > 1 else 0.0
+
+            if ipi in obra["reparto"]:
+                obra["reparto"][ipi]["pct1"] += pct1
+                obra["reparto"][ipi]["pct2"] += pct2
+            else:
+                obra["reparto"][ipi] = {
+                    "tipo": tipo,
+                    "nombre": nombre,
+                    "pct1": pct1,
+                    "pct2": pct2,
                 }
-                for ipi, data in obra["reparto"].items()
-            ]
-            
-            obras.append(obra)
-            
+
+        obra["reparto"] = [
+            {
+                "tipo": data["tipo"],
+                "nombre": data["nombre"],
+                "pct1": data["pct1"],
+                "pct2": data["pct2"],
+                "ipi": ipi
+            }
+            for ipi, data in obra["reparto"].items()
+        ]
+
+        obras.append(obra)
+
+    alertas = revisar_porcentajes(obras)
+    cantidad_obras = len(obras)
+
     res = export_excel(obras, folio, stop_event=stop_event)
-    
-    if res:
-        return True
+
+    if res.get("ok"):
+        return {
+            "ok": True,
+            "alertas": alertas,
+            "cantidad_obras": cantidad_obras,
+            "ruta_destino": res.get("ruta_destino")
+        }
     
 # =========================
 # Export
@@ -155,38 +187,48 @@ def export_excel(obras, folio, stop_event=None):
         return stop_event is not None and stop_event.is_set()
     
     carpeta_base = obtener_carpeta_base()
-    
     ruta_destino = carpeta_base / "MMs" / f"mm_sadaic_{folio}.csv"
     
-    with open(
-        ruta_destino,
-        "w",
-        newline="",
-        encoding="latin-1"
-    ) as f:
+    fila_por_obra = {}
+    fila = 1
+    
+    with open(ruta_destino, "w", newline="", encoding="latin-1") as f:
         writer = csv.writer(f, delimiter=";")
 
-        for obra in obras:
+        for i, obra in enumerate(obras):
             if check_cancel():
                 return {"cancelado": True}
-            # Título de obra (estructura compatible SCD)
-            writer.writerow([obra["nombre_obra"], "", "", "", "", ""])
+            
+            fila_por_obra[obra["nombre_obra"]] = fila
+            
+            writer.writerow([normalizar_nombre(obra["nombre_obra"]), "", "", "", "", ""])
+            fila += 1
+
             writer.writerow([])
             writer.writerow([])
             writer.writerow([])
+            fila += 3
+            
+            suma_m_obra = round(sum((x.get("pct2") or 0.0) for x in obra["reparto"]), 2)
+            mostrar_m = suma_m_obra > 0
 
             for r in obra["reparto"]:
                 if check_cancel():
                     return {"cancelado": True}
+                
+                m_cell = fmt_pct(r["pct2"]) if mostrar_m else ""
+                
                 writer.writerow([
                     r["tipo"],
                     r["nombre"],
-                    r["porcentajes"][0],
-                    r["porcentajes"][1],
+                    fmt_pct(r["pct1"]),
+                    m_cell,
                     "",
                     r["ipi"],
                 ])
+                fila += 1
 
             writer.writerow([])
+            fila += 1
             
-    return True
+    return {"fila_por_obra": fila_por_obra, "ok": True, "ruta_destino": ruta_destino}

@@ -5,7 +5,7 @@ from utils.image_tooltip import ImageTooltip
 from utils.paths import resource_path
 from PIL import Image, ImageTk
 
-from logic.logic_scanner.logic_obrasSGAE import scanner
+from logic.logic_scanner.obras.logic_obrasSGAE import scanner
 
 class ScannerObrasSGAE(ttk.Frame):
     def __init__(self, master, **kwargs):
@@ -115,9 +115,71 @@ class ScannerObrasSGAE(ttk.Frame):
             self.lbl.config(text="Cancelado ✅")
             messagebox.showinfo("Cancelado", "Proceso cancelado.")
             return
-        if res is True:
-            self.lbl.config(text="Terminado ✅")
-            messagebox.showinfo("Notificación", "Excel creado en Escritorio")
+        if isinstance(res, dict) and res.get("ok"):
+            cantidad = res.get("cantidad_obras", 0)
+            ruta = res.get("ruta_destino", "desconocida")
+            alertas = res.get("alertas", [])
+            if alertas:
+                self.mostrar_alertas_copiables(alertas)
+            self.lbl.config(text=f"Terminado ✅ ({cantidad} obras)")
+            messagebox.showinfo("Notificación", f"Excel creado en {ruta}.\nObras procesadas: {cantidad}")
         else:
             self.lbl.config(text="Error ❌")
             messagebox.showerror("Error", "Error al exportar Excel")
+            
+    def mostrar_alertas_copiables(self, alertas):
+
+        win = tk.Toplevel()
+        win.title("⚠️ Alertas de porcentaje")
+        win.geometry("700x500")
+
+        txt = tk.Text(
+            win,
+            wrap="word",
+            font=("Consolas", 10),
+            undo=True,        
+            maxundo=-1       
+        )
+        txt.pack(expand=True, fill="both")
+
+        scroll = tk.Scrollbar(txt)
+        scroll.pack(side="right", fill="y")
+        txt.config(yscrollcommand=scroll.set)
+        scroll.config(command=txt.yview)
+
+        contenido = []
+        contenido.append(f"Hay {len(alertas)} obras con % ≠ 100\n")
+
+        for _, t, iswc, p_s, p_m in alertas:
+            contenido.append(f"{t} ({iswc}) → {p_s:.2f}% / {p_m:.2f}%")
+
+        txt.insert("1.0", "\n".join(contenido))
+        txt.config(state="normal")
+
+        def select_all(event=None):
+            txt.tag_add("sel", "1.0", "end")
+            return "break"
+        
+        def undo(event=None):
+            try:
+                txt.edit_undo()
+            except:
+                pass
+            return "break"
+
+        def redo(event=None):
+            try:
+                txt.edit_redo()
+            except:
+                pass
+            return "break"
+
+        txt.bind("<Control-a>", select_all)
+        txt.bind("<Control-A>", select_all)
+        txt.bind("<Control-z>", undo)
+        txt.bind("<Control-y>", redo)
+        txt.bind("<Control-Z>", undo)
+        txt.bind("<Control-Y>", redo)
+
+        # foco directo
+        txt.focus()

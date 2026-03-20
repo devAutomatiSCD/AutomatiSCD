@@ -55,6 +55,26 @@ def normalizar_nombre(texto: str) -> str:
 
     return texto
 
+def revisar_porcentajes(obras: dict):
+    alertas = []
+
+    for obra in obras.values():
+        titulo = obra.get("obra") or "(sin título)"
+        iswc = obra.get("iswc") or "(sin ISWC)"
+
+        reparto = obra.get("reparto", {}).values()
+
+        suma_p = sum(r.get("porcentaje_1", 0.0) for r in reparto)
+        suma_m = sum(r.get("porcentaje_2", 0.0) for r in reparto)
+
+        suma_p = round(suma_p, 2)
+        suma_m = round(suma_m, 2)
+
+        if abs(suma_p - 100) > 0.01 or (suma_m > 0 and abs(suma_m - 100) > 0.01):
+            alertas.append((titulo, iswc, suma_p, suma_m))
+
+    return alertas
+
 # =========================
 # Scanner
 # =========================
@@ -138,10 +158,18 @@ def scanner(ruta_pdf, folio, stop_event=None):
                         "porcentaje_2": p2,
                     }
 
-    export = export_excel(obras, folio, stop_event=stop_event)
-    
-    if export:
-        return True
+    alertas = revisar_porcentajes(obras)
+    cantidad_obras = len(obras)
+
+    res = export_excel(obras, folio, stop_event=stop_event)
+
+    if res.get("ok"):
+        return {
+            "ok": True,
+            "alertas": alertas,
+            "cantidad_obras": cantidad_obras,
+            "ruta_destino": res.get("ruta_destino")
+        }
     
 # =========================
 # Export
@@ -162,6 +190,9 @@ def export_excel(obras, folio, stop_event=None):
     
     ruta_destino = carpeta_base / "MMs" / f"mm_suisa_{folio}.csv"
     
+    fila_por_obra = {}
+    fila = 1
+    
     with open(
         ruta_destino,
         "w",
@@ -170,27 +201,41 @@ def export_excel(obras, folio, stop_event=None):
     ) as f:
         writer = csv.writer(f, delimiter=";")
 
-        for _, datas in obras.items():
+        for key, datas in obras.items():
             if check_cancel():
                 return {"cancelado": True}
+            
+            fila_por_obra[key] = fila
+            
             # Título de obra (estructura compatible SCD)
             writer.writerow([normalizar_nombre(datas["obra"]), "", "", "", "", ""])
             writer.writerow([])
             writer.writerow([])
             writer.writerow([])
-
+            
+            suma_m_obra = round(
+                sum((x.get("porcentaje_2") or 0.0) for x in datas["reparto"].values()),
+                2
+            )
+            mostrar_m = suma_m_obra > 0
+            
             for ipi, r in datas["reparto"].items():
                 if check_cancel():
                     return {"cancelado": True}
+                
+                m_cell = fmt_pct(r["porcentaje_2"]) if mostrar_m else ""
+                
                 writer.writerow([
                     r["caes"],
                     r["nombre"],
                     fmt_pct(r["porcentaje_1"]),
-                    fmt_pct(r["porcentaje_2"]),
+                    m_cell,
                     "",
                     ipi,
                 ])
 
             writer.writerow([])
+            fila += 1
             
-    return True
+    return {"fila_por_obra": fila_por_obra, "ok": True, "ruta_destino": ruta_destino}
+

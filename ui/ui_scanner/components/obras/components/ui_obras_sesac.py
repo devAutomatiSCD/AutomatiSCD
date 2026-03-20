@@ -2,8 +2,6 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from threading import Thread, Event
 
-from logic.logic_scanner.logic_obrasSGAE import scanner
-
 class ScannerObrasSESAC(ttk.Frame):
     def __init__(self, master, **kwargs):
         super().__init__(master, **kwargs)

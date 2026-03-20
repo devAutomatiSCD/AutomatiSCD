@@ -4,8 +4,8 @@ from tkinter import ttk
 from ui.ui_scanner.components.conexos.ui_conexos import ScannerConexos
 from ui.ui_scanner.components.obras.ui_obras_selector import ObrasSelector
 from ui.ui_scanner.components.obras.ui_obras_main import ObrasMain
-from ui.ui_scanner.components.cue_sheets.ui_cue_sheets_selector import CueSheetsSelector
-from ui.ui_scanner.components.cue_sheets.ui_cue_sheets_main import CueSheetsMain
+from ui.ui_scanner.components.cuesheets.ui_cue_sheets_selector import CueSheetsSelector
+from ui.ui_scanner.components.cuesheets.ui_cue_sheets_main import CueSheetsMain
 
 
 class ScannerContainer(ttk.Frame):

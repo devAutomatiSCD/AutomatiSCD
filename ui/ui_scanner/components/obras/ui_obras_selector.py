@@ -9,9 +9,11 @@ class ObrasSelector(ttk.Frame):
         menu = tk.Menu(mb, tearoff=0)
         mb["menu"] = menu
 
-        sociedades = ["AFITAP","AGADU","APDAYC","CISNET","IMRO","JASRAC","KODA","SACEM",
-                    "SACM","SADAIC","SESAC","SGAE","STIM","SUISA", "TONO", "PEER", "MSG", 
-                    "MESAM", "ABRAMUS", "APRA"]
+        sociedades = sorted([
+            "AFITAP","AGADU","APDAYC","CISNET","IMRO","JASRAC","KODA","SACEM",
+            "SACM","SADAIC","SESAC","SGAE","STIM","SUISA","TONO","PEER","MSG",
+            "MESAM","ABRAMUS","APRA","KOMCA"
+        ])
 
         for s in sociedades:
             menu.add_command(label=s, command=lambda s=s: on_select(s))

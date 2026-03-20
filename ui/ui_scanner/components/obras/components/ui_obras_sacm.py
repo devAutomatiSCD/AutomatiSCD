@@ -2,8 +2,6 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from threading import Thread, Event
 
-from logic.logic_scanner.logic_obrasSGAE import scanner
-
 class ScannerObrasSACM(ttk.Frame):
     def __init__(self, master, **kwargs):
         super().__init__(master, **kwargs)
@@ -15,4 +13,4 @@ class ScannerObrasSACM(ttk.Frame):
         frm.pack(fill="x")
         frm.grid_columnconfigure(1, weight=1)
 
-        self.ttk.Label(frm, text="Obras SACM - EN CONSTRUCCIÓN").pack(padx=10, pady=10)
+        ttk.Label(frm, text="Obras SACM - EN CONSTRUCCIÓN").pack(padx=10, pady=10)

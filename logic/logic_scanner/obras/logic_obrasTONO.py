@@ -192,6 +192,24 @@ def normalizar_nombre(texto: str) -> str:
 
     return texto
 
+def revisar_porcentajes(obras: dict):
+    alertas = []
+
+    for key, obra in obras.items():
+        titulo = obra.get("titulo") or "(sin título)"
+        iswc = obra.get("iswc") or "(sin ISWC)"
+
+        suma_p = sum(r.get("p_share", 0.0) for r in obra["dh"])
+        suma_m = sum(r.get("m_share", 0.0) for r in obra["dh"])
+
+        suma_p = round(suma_p, 2)
+        suma_m = round(suma_m, 2)
+        
+        if suma_p != 100 or (suma_m != 100 and suma_m > 0):
+            alertas.append((key, titulo, iswc, suma_p, suma_m))
+
+    return alertas
+
 # =========================
 # Scanner
 # =========================
@@ -216,10 +234,13 @@ def scanner_pdf(ruta, folio, stop_event=None):
         obras = agrupar_por_iswc(rows)
         obras = consolidar_dh(obras)
         
+    alertas = revisar_porcentajes(obras)
+    cantidad_obras = len(obras)
     res = export_excel(obras, folio, stop_event=stop_event)
     
-    if res:
-        return True
+    if res.get("ok"):
+        return {"ok": True, "alertas": alertas, "cantidad_obras": cantidad_obras, "ruta_destino": res.get("ruta_destino")}
+
     
 def scanner_carpetas(obras_pdf, folio, stop_event=None):
 
@@ -243,9 +264,14 @@ def scanner_carpetas(obras_pdf, folio, stop_event=None):
 
     obras = agrupar_por_iswc(all_rows)
     obras = consolidar_dh(obras)
+    alertas = revisar_porcentajes(obras)
+    cantidad_obras = len(obras)
 
     res = export_excel(obras, folio, stop_event=stop_event)
-    return True if res else False
+    
+    if res.get("ok"):
+        return {"ok": True, "alertas": alertas, "cantidad_obras": cantidad_obras, "ruta_destino": res.get("ruta_destino")}
+
 
 def scanner(ruta, folio, stop_event=None, modo="file"):
     
@@ -268,6 +294,9 @@ def export_excel(obras, folio, stop_event=None):
     carpeta_base = obtener_carpeta_base()
     
     ruta_destino = carpeta_base / "MMs" / f"mm_tono_{folio}.csv"
+    
+    fila_por_obra = {}
+    fila = 1
 
     with open(
         ruta_destino,
@@ -277,29 +306,41 @@ def export_excel(obras, folio, stop_event=None):
     ) as f:
         writer = csv.writer(f, delimiter=";")
 
-        for iswc, obra in obras.items():
+        for key, obra in obras.items():
             
             if check_cancel():
                 return {"cancelado": True}
-
+            
+            fila_por_obra[key] = fila
+        
             # Fila título
             writer.writerow([parse_name(obra["titulo"]), "", "", "", "", ""])
             writer.writerow([])
             writer.writerow([])
             writer.writerow([])
+            
+            suma_m_obra = round(sum((x.get("m_share") or 0.0) for x in obra["dh"]), 2)
+            mostrar_m = suma_m_obra > 0
 
             # DH
             for r in obra["dh"]:
+                m_cell = (
+                    f"{r['m_share']:.2f}".replace(".", ",")
+                    if mostrar_m
+                    else ""
+                )
                 writer.writerow([
                     r["rol"],
                     normalizar_nombre(r["nombre"]),
                     f"{r['p_share']:.2f}".replace(".", ","),
-                    f"{r['m_share']:.2f}".replace(".", ","),
+                    m_cell,
                     "",
                     parse_ipi(r["ipn"]),
                 ])
 
             writer.writerow([])
+            fila += 1
             
-    return True
+    return {"fila_por_obra": fila_por_obra, "ok": True, "ruta_destino": ruta_destino}
+
     

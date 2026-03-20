@@ -5,7 +5,7 @@ from utils.image_tooltip import ImageTooltip
 from utils.paths import resource_path
 from PIL import Image, ImageTk
 
-from logic.logic_scanner.logic_obrasAGADU import scanner
+from logic.logic_scanner.obras.logic_obrasAGADU import scanner
 
 class ScannerObrasAGADU(ttk.Frame):
     def __init__(self, master, **kwargs):

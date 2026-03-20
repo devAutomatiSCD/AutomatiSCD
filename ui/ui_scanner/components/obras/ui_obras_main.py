@@ -19,6 +19,7 @@ from ui.ui_scanner.components.obras.components.ui_obras_msg import ScannerObrasM
 from ui.ui_scanner.components.obras.components.ui_obras_mesam import ScannerObrasMESAM
 from ui.ui_scanner.components.obras.components.ui_obras_abramus import ScannerObrasABRAMUS
 from ui.ui_scanner.components.obras.components.ui_obras_apra import ScannerObrasAPRA
+from ui.ui_scanner.components.obras.components.ui_obras_komca import ScannerObrasKOMCA
 
 class ObrasMain(ttk.Frame):
     def __init__(self, master, **kwargs):
@@ -53,7 +54,8 @@ class ObrasMain(ttk.Frame):
             "MSG": ScannerObrasMSG,
             "MESAM": ScannerObrasMESAM,
             "ABRAMUS": ScannerObrasABRAMUS,
-            "APRA": ScannerObrasAPRA
+            "APRA": ScannerObrasAPRA,
+            "KOMCA": ScannerObrasKOMCA
         }
 
         self.vistas = {}

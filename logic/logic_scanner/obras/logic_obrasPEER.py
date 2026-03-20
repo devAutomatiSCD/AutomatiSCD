@@ -1,35 +1,30 @@
 import pdfplumber, re, csv, os, unicodedata
 from collections import defaultdict, OrderedDict
 from utils.config_manager import obtener_carpeta_base
-
 # =========================
 # Parsers
 # =========================
 
 LINE_RE = re.compile(
     r'^\s*'
-    r'(?:(?P<prefix>.*?)(?=\d{1,2}(?:,\d{3})+-\d{1,2}\s))?'  
-    r'(?P<ipi>\d{1,2}(?:,\d{3})+-\d{1,2})\s+'
-    r'(?P<rol>[A-Z]{1,3})\s+'
-    r'(?P<nombre>[A-ZÁÉÍÓÚÑ ]+?)\s+'
-    r'(?P<p1>\d{1,3}\.\d{2})%(?P<soc1>[A-Z]+)\s*\((?P<n1>\d+)\)\s+'
-    r'(?P<p2>\d{1,3}\.\d{2})%(?P<soc2>[A-Z]+)\s*\((?P<n2>\d+)\)\s*'
-    r'$'
+    r'\d+\.\s*'                        
+    r'(?P<rol>[A-Z]{1,3})\s+'         
+    r'(?P<nombre>.+?)\s+'              
+    r'(?P<p_share>\d{1,3},\d{2})\s+'
+    r'(?P<m_share>\d{1,3},\d{2})%\s+'
+    r'(?P<m_soc>[A-Za-z]+)\s+'
+    r'(?P<ipn>\d{8,12})\s*$'
 )
 
 TITLE_RE = re.compile(
-    r'^\s*'
-    r'\d{1,3}(?:,\d{3})*\s+'                     
-    r'(?P<iswc>T-\d{3}\.\d{3}\.\d{3}-\d)\s+'    
-    r'(?P<title>.+?)'                            
-    r'\s+(?:OT\b.*)?$'                           
+    r'^(?P<iswc>\d+)\s+\d+\.\s+(?P<title>.+)$'
 )
 
 def parse_lines(text: str, stop_event=None):
     
     def check_cancel():
         return stop_event is not None and stop_event.is_set()
-    
+        
     rows = []
     current_title = None
     current_iswc = None
@@ -44,12 +39,14 @@ def parse_lines(text: str, stop_event=None):
             continue
 
         tm = TITLE_RE.match(line)
+        # print(bool(tm))
         if tm:
             current_title = tm.group("title")
             current_iswc = tm.group("iswc")
             continue
 
         d = parse_dh_line(line)
+        print(d)
         if not d or not current_iswc:
             continue
 
@@ -67,8 +64,10 @@ def agrupar_por_iswc(rows, stop_event=None):
     obras = defaultdict(lambda: {"titulo": None, "iswc": None, "dh": []})
 
     for r in rows:
+        
         if check_cancel():
-            return {"cancelado": True}
+                return {"cancelado": True}
+            
         iswc = r["iswc"]
         obras[iswc]["titulo"] = r["nombre_obra"]
         obras[iswc]["iswc"] = iswc
@@ -82,21 +81,24 @@ def consolidar_dh_por_ipn(obras: dict, stop_event=None) -> dict:
         return stop_event is not None and stop_event.is_set()
     
     for iswc, obra in obras.items():
-        if check_cancel():
-            return {"cancelado": True}
         
+        if check_cancel():
+                return {"cancelado": True}
+            
         acumulado = OrderedDict()
 
         for r in obra["dh"]:
+            
             if check_cancel():
                 return {"cancelado": True}
-            key = (r["ipi"], r["rol"]) 
+            
+            key = (r["ipn"], r["rol"]) 
 
             if key not in acumulado:
                 acumulado[key] = dict(r) 
             else:
-                acumulado[key]["p1"] += r["p1"]
-                acumulado[key]["p2"] += r["p2"]
+                acumulado[key]["p_share"] += r["p_share"]
+                acumulado[key]["m_share"] += r["m_share"]
 
         obra["dh"] = list(acumulado.values())
 
@@ -109,17 +111,19 @@ def parse_dh_line(line: str) -> dict | None:
 
     d = m.groupdict()
 
-    d["p1"] = float(d["p1"].replace(",", "."))
+    # P-Share siempre viene
+    d["p_share"] = float(d["p_share"].replace(",", "."))
 
-    if d["p2"]:
-        d["p2"] = float(d["p2"].replace(",", "."))
+    # M-Share opcional => si no viene, 0
+    if d["m_share"]:
+        d["m_share"] = float(d["m_share"].replace(",", "."))
     else:
-        d["p2"] = 0.0
+        d["m_share"] = 0.0
+        d["m_soc"] = None  # o "NS" si quieres un placeholder
 
     return d
 
 def parse_ipi(p):
-    p = p.replace(",", "").replace("-", "")
     return p.lstrip("0")
 
 def parse_name(titulo: str) -> str:
@@ -136,6 +140,24 @@ def normalizar_nombre(texto: str) -> str:
     texto = re.sub(r"\s+", " ", texto).strip()
 
     return texto
+
+def revisar_porcentajes(obras: dict):
+    alertas = []
+
+    for key, obra in obras.items():
+        titulo = obra.get("titulo") or "(sin título)"
+        iswc = obra.get("iswc") or "(sin ISWC)"
+
+        suma_p = sum(r.get("p_share", 0.0) for r in obra["dh"])
+        suma_m = sum(r.get("m_share", 0.0) for r in obra["dh"])
+
+        suma_p = round(suma_p, 2)
+        suma_m = round(suma_m, 2)
+        
+        if suma_p != 100 or (suma_m != 100 and suma_m > 0):
+            alertas.append((key, titulo, iswc, suma_p, suma_m))
+
+    return alertas
 
 # =========================
 # Scanner
@@ -161,23 +183,28 @@ def scanner(ruta, folio, stop_event=None):
         obras = agrupar_por_iswc(rows, stop_event=stop_event)
         obras = consolidar_dh_por_ipn(obras, stop_event=stop_event)
         
+    alertas = revisar_porcentajes(obras)
+    cantidad_obras = len(obras)
     res = export_excel(obras, folio, stop_event=stop_event)
     
-    if res:
-        return True
-    
+    if res.get("ok"):
+        return {"ok": True, "alertas": alertas, "cantidad_obras": cantidad_obras, "ruta_destino": res.get("ruta_destino")}
+
 # =========================
 # Export
 # =========================
 
 def export_excel(obras, folio, stop_event=None):
-    
+
     def check_cancel():
         return stop_event is not None and stop_event.is_set()
     
     carpeta_base = obtener_carpeta_base()
     
-    ruta_destino = carpeta_base / "MMs" / f"mm_apdayc_{folio}.csv"
+    ruta_destino = carpeta_base / "MMs" / f"mm_peer_{folio}.csv"
+    
+    fila_por_obra = {}
+    fila = 1
     
     with open(
         ruta_destino,
@@ -187,30 +214,43 @@ def export_excel(obras, folio, stop_event=None):
     ) as f:
         writer = csv.writer(f, delimiter=";")
 
-        for iswc, obra in obras.items():
+        for key, obra in obras.items():
             
             if check_cancel():
                 return {"cancelado": True}
-
-            # Fila título
+            
+            fila_por_obra[key] = fila
+            
             writer.writerow([parse_name(obra["titulo"]), "", "", "", "", ""])
             writer.writerow([])
             writer.writerow([])
             writer.writerow([])
+            
+            suma_m_obra = round(sum((x.get("m_share") or 0.0) for x in obra["dh"]), 2)
+            mostrar_m = suma_m_obra > 0
 
-            # DH
             for r in obra["dh"]:
+                
+                if check_cancel():
+                    return {"cancelado": True}
+                
+                m_cell = (
+                    f"{r['m_share']:.2f}".replace(".", ",")
+                    if mostrar_m
+                    else ""
+                )
+            
                 writer.writerow([
                     r["rol"],
                     normalizar_nombre(r["nombre"]),
-                    f"{r['p1']:.2f}".replace(".", ","),
-                    f"{r['p2']:.2f}".replace(".", ","),
+                    f"{r['p_share']:.2f}".replace(".", ","),
+                    m_cell,
                     "",
-                    parse_ipi(r["ipi"]),
+                    parse_ipi(r["ipn"]),
                 ])
 
             writer.writerow([])
 
-    return True
+    return {"fila_por_obra": fila_por_obra, "ok": True, "ruta_destino": ruta_destino}
 
     

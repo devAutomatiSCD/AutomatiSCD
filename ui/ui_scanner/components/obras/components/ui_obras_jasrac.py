@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from threading import Thread, Event
 
-from logic.logic_scanner.logic_obrasSGAE import scanner
+from logic.logic_scanner.obras.logic_obrasSGAE import scanner
 
 class ScannerObrasJASRAC(ttk.Frame):
     def __init__(self, master, **kwargs):
